@@ -73,6 +73,36 @@ public class FXService: FXErrorClassifier {
         }
     }
 
+    public func registerPackage<T: FXRulesetPackage>(_ pkg: T.Type, with config: T.Config, runtimeConfig: T.RuntimeConfig, authenticator: FXResourceAuthenticator, _ ctx: Context) async throws {
+
+        let newResources = try await pkg.createExternalResources(config, runtimeConfig: runtimeConfig, group: group, authenticator: authenticator, ctx)
+        try _resources.withLockedValue { resources in
+            // check all resources first, so that we don't leave anything dangling on failure
+            for r in newResources {
+                if resources.keys.contains(.external(r.name)) {
+                    throw Error.duplicateResource(r.name)
+                }
+            }
+
+            for r in newResources {
+                resources[.external(r.name)] = r
+            }
+        }
+
+        let newRulesets = pkg.createRulesets()
+        _rulesets.withLockedValue {
+            for ruleset in newRulesets {
+                $0[ruleset.name] = ruleset
+            }
+        }
+
+        if let classifier = pkg.createErrorClassifier() {
+            _errorClassifiers.withLockedValue {
+                $0.append(classifier)
+            }
+        }
+    }
+
     public func tryClassifyError(_ error: Swift.Error) -> FXErrorDetails? {
         return _errorClassifiers.withLockedValue { classifiers in
             for classifier in classifiers {

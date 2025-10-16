@@ -53,6 +53,7 @@ public protocol FXResourceAuthenticator: Sendable {
 
 public protocol FXRulesetPackage {
     associatedtype Config: Sendable
+    associatedtype RuntimeConfig: Sendable = [String: String]
 
     // Create all the rulesets supported by this package
     static func createRulesets() -> [FXRuleset]
@@ -63,6 +64,16 @@ public protocol FXRulesetPackage {
     // using package(s) MUST call this method exactly once per process lifetime.
     static func createExternalResources(
         _ config: Config,
+        group: LLBFuturesDispatchGroup,
+        authenticator: FXResourceAuthenticator,
+        _ ctx: Context
+    ) async throws -> [FXResource]
+
+    // Extended version that accepts runtime configuration from the service
+    // If implemented, this will be called instead of the basic version above
+    static func createExternalResources(
+        _ config: Config,
+        runtimeConfig: RuntimeConfig,
         group: LLBFuturesDispatchGroup,
         authenticator: FXResourceAuthenticator,
         _ ctx: Context
@@ -79,6 +90,17 @@ extension FXRulesetPackage {
         _ ctx: Context
     ) async throws -> [FXResource] {
         return []
+    }
+
+    public static func createExternalResources(
+        _ config: Config,
+        runtimeConfig: RuntimeConfig,
+        group: LLBFuturesDispatchGroup,
+        authenticator: FXResourceAuthenticator,
+        _ ctx: Context
+    ) async throws -> [FXResource] {
+        // Default implementation delegates to the basic version for backward compatibility
+        return try await createExternalResources(config, group: group, authenticator: authenticator, ctx)
     }
 
     public static func createErrorClassifier() -> FXErrorClassifier? {
